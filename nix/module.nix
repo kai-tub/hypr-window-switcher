@@ -1,13 +1,14 @@
-{ config, lib, pkgs, nix-filter, ... }:
+nix-filter:
+{ config, lib, pkgs, ... }:
 let name = "hypr-window-switcher";
 in {
-  options.${name} = { enable = lib.mkEnableOption name; };
-  config = lib.mkIf config.${name}.enable {
+  options.programs.${name} = { enable = lib.mkEnableOption name; };
+  config = lib.mkIf config.programs.${name}.enable {
     environment.systemPackages = [
-      pkgs.callPackage
-      ./hypr-window-switcher-package
       # FUTURE: selected nushell
-      { inherit nix-filter; }
+      (pkgs.callPackage ./hypr-window-switcher-package.nix {
+        inherit nix-filter;
+      })
     ];
   };
 }

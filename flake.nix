@@ -20,9 +20,9 @@
       pkgsFor = eachSystem (system: nixpkgs.legacyPackages.${system});
       filter = nix-filter.lib;
     in {
-      nixosModules.hypr-window-switcher =
-        import ./nix/module.nix { nix-filter = filter; };
-      nixosModules.default = self.hypr-window-switcher;
+      # partially apply nix-filter
+      nixosModules.hypr-window-switcher = import ./nix/module.nix nix-filter;
+      nixosModules.default = self.nixosModules.hypr-window-switcher;
       packages = eachSystem (system:
         let pkgs = pkgsFor.${system};
         in {
