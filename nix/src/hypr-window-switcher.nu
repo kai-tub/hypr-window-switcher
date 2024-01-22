@@ -58,7 +58,7 @@ let swallowing_full_screen_windows = $windows
 let cmd = $swallowing_full_screen_windows
   | get address
   | reduce --fold "" {|it, acc| $"dispatch focuswindow address:($it); dispatch fullscreen 0; " ++ $acc }
-  | ($in ++ $"dispatch focuswindow address:($selected_address)")
+  | ($in ++ $"dispatch focuswindow address:($selected_address); dispatch movecursortocorner 3")
 
 log info $"About to execute hyprctl --batch ($cmd)"
 $cmd | ^hyprctl --batch $in
