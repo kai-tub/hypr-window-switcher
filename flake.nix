@@ -30,7 +30,101 @@
             pkgs.callPackage ./nix/hypr-window-switcher-package.nix {
               nix-filter = filter;
             };
+          "hypr-window-switcher-runner" = pkgs.writeShellApplication {
+            name = "hypr-window-switcher-runner";
+            runtimeInputs = [ self.packages.${system}.hypr-window-switcher ];
+            text = ''
+              # create log directory where the logs will be written to
+              NU_LOG_LEVEL=DEBUG hypr-window-switcher &> /tmp/hypr-window-switcher.log
+            '';
+          };
           default = self.packages.${system}."hypr-window-switcher";
+
+          # https://github.com/NixOS/nixpkgs/blob/master/nixos/tests/sway.nix
+          test = pkgs.nixosTest ({
+            name = "test";
+            nodes = let user = "alice";
+            in {
+              node = { config, pkgs, ... }: {
+                imports = [ home-manager.nixosModules.home-manager ];
+                boot.kernelPackages = pkgs.linuxPackages;
+                programs.hyprland = { enable = true; };
+                # user account generation
+                users.users = {
+                  "${user}" = {
+                    isNormalUser = true;
+                    extraGroups = [ "networkmanager" "wheel" ];
+                    password = "alice";
+                    # TODO: set id
+                  };
+                };
+                services.getty.autologinUser = user;
+                programs.bash.loginShellInit = ''
+                  if [ "$(tty)" = "/dev/tty1" ]; then
+                    set -e
+
+                    Hyprland && touch /tmp/hyprland-exit-ok
+                  fi
+                '';
+                environment = {
+                  systemPackages = with pkgs; [ alacritty fuzzel mesa-demos ];
+                  variables = {
+                    # Seems to work without any issues for me!
+                    # ok, calling glxinfo does report that there is an error with the
+                    # zink renderer but it feels like it is hardware accellerated
+                    "WLR_RENDERER" = "pixman";
+                    "WLR_RENDERER_ALLOW_SOFTWARE" = "1";
+                  };
+                };
+                # services.xserver.resolution = [ {
+                #   x = 1920;
+                #   y = 1080;
+                # }];
+                # TODO: Make test with my new qemu window rule
+                # that pretends to always fullscreen the application!
+                virtualisation.resolution = {
+                  x = 1920;
+                  y = 1024;
+                };
+                virtualisation.qemu.options =
+                  [ "-vga none -device virtio-gpu-pci" ];
+                home-manager.users.${user} = {
+                  home.username = user;
+                  home.homeDirectory = "/home/${user}";
+                  wayland.windowManager.hyprland = {
+                    enable = true;
+                    settings = {
+                      "$mod" = "CTRL_SHIFT";
+                      "bind" = "$mod, Q, exec, kitty";
+                      "exec-once" = "fuzzel";
+                      "monitor" = [ ", 1920x1080, auto, 1" ];
+                    };
+                  };
+                  home.stateVersion = "24.05";
+                };
+              };
+            };
+            skipLint = true;
+            testScript = ''
+              start_all()
+              node.wait_for_unit("multi-user.target")
+              # To check if Hyprland can be accessed
+              # node.succeed("Hyprland --help")
+              # Wait for Hyprland to complete startup:
+              node.wait_for_file("/run/user/1000/wayland-1")
+              # get env echo $HYPRLAND_INSTANCE_SIGNATURE
+              # and use that to interpolate to get access to socket
+              # node.wait_for_file("/tmp/hypr/SIG/.socket.sock")
+              node.sleep(3)
+              # Embeds the screenshot into the `./result/` section
+              node.screenshot("shot.png")
+
+              # Exit and check exit status
+              # node.wait_for_file("/tmp/hyprland-exit-ok")
+              node.shutdown()
+
+            '';
+          });
         });
       devShells = eachSystem (system:
         let pkgs = pkgsFor.${system};
