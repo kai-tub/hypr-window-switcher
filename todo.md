@@ -1,4 +1,0 @@
-- [] Add metadata information like description, author, license, mainProgram
-- [] Embed option that allows defining which exact nushell version is used
-- [] Potentially add overlay to make it easier to find the package but only if remains possible to define which nushell version to use
-- [] Further investigate if it possible to write a Hyprland window switcher simulation test

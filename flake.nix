@@ -1,5 +1,4 @@
 {
-  # description = "A very basic flake";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     nix-colors.url = "github:misterio77/nix-colors";
@@ -13,15 +12,15 @@
   };
 
   outputs = { self, nixpkgs, nix-colors, home-manager, systems, nix-filter
-    , nixos-shell }:
+    , nixos-shell }@inputs:
     let
       lib = nixpkgs.lib;
       eachSystem = lib.genAttrs (import systems);
       pkgsFor = eachSystem (system: nixpkgs.legacyPackages.${system});
       filter = nix-filter.lib;
     in {
-      # partially apply nix-filter
-      nixosModules.hypr-window-switcher = import ./nix/module.nix nix-filter;
+      # Forward inputs so that the module has access to everything!
+      nixosModules.hypr-window-switcher = import ./nix/module.nix inputs;
       nixosModules.default = self.nixosModules.hypr-window-switcher;
       packages = eachSystem (system:
         let pkgs = pkgsFor.${system};
@@ -31,6 +30,215 @@
               nix-filter = filter;
             };
           default = self.packages.${system}."hypr-window-switcher";
+
+          # inspired by:
+          # https://github.com/NixOS/nixpkgs/blob/master/nixos/tests/sway.nix
+          test = pkgs.nixosTest ({
+            name = "test";
+            nodes = let user = "alice";
+            in {
+              node = { config, pkgs, ... }: {
+                imports = [
+                  home-manager.nixosModules.home-manager
+                  self.nixosModules.default
+                ];
+                boot.kernelPackages = pkgs.linuxPackages;
+                programs.hyprland = { enable = true; };
+                programs.hypr-window-switcher.enable = true;
+                # user account generation
+                users.users = {
+                  "${user}" = {
+                    isNormalUser = true;
+                    extraGroups = [ "networkmanager" "wheel" ];
+                    password = "alice";
+                    uid = 1000;
+                  };
+                };
+                services.getty.autologinUser = user;
+                programs.bash.loginShellInit = ''
+                  if [ "$(tty)" = "/dev/tty1" ]; then
+                    set -e
+
+                    Hyprland
+                  fi
+                '';
+                environment = {
+                  # systemPackages = with pkgs; [ mesa-demos foot ];
+                  variables = {
+                    # Seems to work without any issues for me!
+                    # ok, calling glxinfo does report that there is an error with the
+                    # zink renderer but it feels like it is hardware accellerated
+                    "WLR_RENDERER" = "pixman";
+                    "WLR_RENDERER_ALLOW_SOFTWARE" = "1";
+                  };
+                };
+                # but keyboard input to start switcher and to input logic
+                # FUTURE: Does the gpu option also work on github?
+                # Just set it manually in Hyprland config works best
+                # virtualisation.resolution = { x = 1920; y = 1024; };
+                virtualisation.qemu.options =
+                  [ "-vga none -device virtio-gpu-pci" ];
+                # FUTURE: maybe I should create tmpfiles
+                # /tmp/hypr for home-manager instance 
+                # didn't work
+                # systemd.tmpfiles.rules = [ "/tmp/hypr d - - -" ];
+
+                home-manager.users.${user} = {
+                  home.username = user;
+                  home.homeDirectory = "/home/${user}";
+                  wayland.windowManager.hyprland = {
+                    enable = true;
+                    settings = {
+                      "$mod" = "CTRL_SHIFT";
+                      "bind" = [
+                        "$mod, Q, exec, foot"
+                        "$mod, W, exec, hypr-window-switcher"
+                        "$mod, F, fullscreen, 1"
+                        "$mod, 1, workspace, 1"
+                        "$mod, 2, workspace, 2"
+                        "$mod, 3, workspace, 3"
+                      ];
+                      debug = { disable_logs = false; };
+                      misc = {
+                        "force_default_wallpaper" = 0; # disable anime
+                        disable_hyprland_logo = 1;
+                        # "disable_splash_rendering" = 1; # this breaks it somehow
+                      };
+                      "animations" = {
+                        enabled = false;
+                        first_launch_animation = false;
+                      };
+                      # if I want to have high-res debugging:
+                      # "monitor" = [ ", 1920x1080, auto, 1" ];
+                    };
+                  };
+                  home.stateVersion = "24.05";
+                };
+              };
+            };
+            skipLint = false;
+            # let
+            # user = nodes.machine.config.users.users.alice;
+            # bus = "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${
+            #     toString user.uid
+            #   }/bus";
+            # in ''
+            testScript = ''
+              def safe_screenshot(name):
+                node.sleep(3)
+                node.screenshot(name)
+                node.sleep(3)
+
+              def execute_window_switcher(chars: str):
+                # Start the hypr-window-switcher
+                node.send_key("ctrl-shift-w")
+                # but as it is an overlay, it won't be listed in `clients` or `activewindow`
+                # Instead I need to wait until the fuzzel binary has been started
+                node.wait_until_succeeds("pgrep fuzzel", timeout=10)
+                # there is a tiny delay from starting the binary, until it is focused by hyprland
+                node.sleep(1)
+                node.send_chars(chars)
+                # # needs a bit to show the new focused window
+
+              def mk_cmd_is_active_window(initial_class):
+                return f"systemd-run \
+                  --machine alice@ \
+                  --user \
+                  --wait \
+                   ${pkgs.nushell}/bin/nu --no-config-file --commands \
+                    '${pkgs.hyprland}/bin/hyprctl activewindow -j \
+                    | from json \
+                    | get initialClass? \
+                    | $in == {initial_class} \
+                    | match $in {{ true => {{ exit 0 }}, false => {{ exit 1 }} }}' \
+                "
+
+              def mk_cmd_is_fullscreen(initial_class):
+                return f"systemd-run \
+                  --machine alice@ \
+                  --user \
+                  --wait \
+                   ${pkgs.nushell}/bin/nu --no-config-file --commands \
+                    '${pkgs.hyprland}/bin/hyprctl clients -j \
+                    | from json \
+                    | where {{ |r| $r.initialClass == {initial_class} }} \
+                    | get fullscreen.0 \
+                    | match $in {{ true => {{ exit 0 }}, false => {{ exit 1 }} }}' \
+                "
+
+              def mk_cmd_is_empty():
+                return "systemd-run \
+                  --machine alice@ \
+                  --user \
+                  --wait \
+                   ${pkgs.nushell}/bin/nu --no-config-file --commands \
+                      '${pkgs.hyprland}/bin/hyprctl activewindow -j | from json | is-empty | match $in { true => {exit 0}, false => {exit 1} }'\
+                "
+
+              def mk_cmd_start_foot(app_id):
+                return f"systemd-run \
+                  --machine alice@ \
+                  --user \
+                  --service-type=exec \
+                  ${pkgs.foot}/bin/foot --app-id {app_id}"
+
+              node.start()
+
+              with subtest("Starting Hyprland"):
+                node.wait_for_unit("multi-user.target")
+                # Wait for Hyprland to complete startup:
+                node.wait_for_file("/run/user/1000/wayland-1")
+                # wait_for_unit cannot be used as it fails on 'in-active' state!
+                node.wait_until_succeeds("systemctl --machine alice@ --user is-active hyprland-session.target")
+                node.send_key("ctrl-shift-1") # Force workspace-1 just because we can
+
+              with subtest("Starting two terminals called `first` and `second`"):
+                # start first terminal
+                node.succeed(mk_cmd_start_foot("first"))
+                # check if first is in focus
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                # start second terminal
+                node.succeed(mk_cmd_start_foot("second"))
+
+              with subtest("Ensure that `second` is focused"):
+                node.wait_until_succeeds(mk_cmd_is_active_window("second"))
+
+              with subtest("Switch to `first` via `hypr-window-switcher`"):
+                execute_window_switcher("first\n")
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+
+              # Simple test that cycles between both windows by selecting the default one
+              # Starting with focus on `first` from previous test
+              with subtest("Ensure that current active window isn't the default selection"):
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                execute_window_switcher("\n")
+                node.wait_until_succeeds(mk_cmd_is_active_window("second"))
+                execute_window_switcher("\n")
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+
+              # Starting with focus on `first`
+              with subtest("Ensure switcher can be called on empty workspace"):
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.send_key("ctrl-shift-3")
+                node.wait_until_succeeds(mk_cmd_is_empty())
+                # safe_screenshot("empty-workspace.png")
+                # assuming that new workspace doesn't have activewindow
+                execute_window_switcher("first\n")
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                # safe_screenshot("switched-workspace.png")
+
+              with subtest("Ensure switcher undoes fullscreen, if target window is covered by fullscreen"):
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.send_key("ctrl-shift-f")
+                node.wait_until_succeeds(mk_cmd_is_fullscreen("first"))
+                safe_screenshot("fullscreen.png")
+                execute_window_switcher("second\n")
+                node.wait_until_fails(mk_cmd_is_fullscreen("first"))
+                safe_screenshot("not-fullscreen.png")
+
+              node.shutdown()
+            '';
+          });
         });
       devShells = eachSystem (system:
         let pkgs = pkgsFor.${system};
@@ -40,99 +248,5 @@
             buildInputs = [ pkgs.stdenv ];
           };
         });
-      nixosConfigurations = eachSystem (system:
-        let
-          pkgs = pkgsFor.${system};
-          user = "alice";
-        in lib.makeOverridable lib.nixosSystem {
-          inherit system;
-          modules = [
-            nixos-shell.nixosModules.nixos-shell
-            home-manager.nixosModules.home-manager
-            {
-              boot.kernelPackages = pkgs.linuxPackages_latest;
-              nixos-shell.mounts = {
-                # can lead to not so nice behavior if combined with home-manager...
-                mountHome = false;
-              };
-              virtualisation.memorySize = 4096;
-              services.xserver.enable = true;
-              services.xserver.displayManager.sddm = {
-                enable = true;
-                settings = {
-                  # Autologin = {
-                  #   Session = "hyprland";
-                  #   User = user;
-                  # };
-                };
-              };
-              virtualisation.graphics = true;
-              users.users = {
-                "${user}" = {
-                  isNormalUser = true;
-                  extraGroups = [ "networkmanager" "wheel" ];
-                  password = "root";
-                };
-              };
-              environment.systemPackages = with pkgs; [
-                kitty
-                fuzzel
-                vim
-                helix
-              ];
-
-              # Cage would be kinda cool if I weren't testing
-              # an application that lays on top of other windows...
-              # services.cage = {
-              #   enable = true;
-              #   user = user;
-              #   program = "${pkgs.fuzzel}/bin/fuzzel -d --layer=overlay";
-              # };
-
-              # virtualisation = {
-              #   qemu.options = [ "-vga virtio" ];
-              # };
-              # https://discourse.nixos.org/t/runtest-getting-a-screenshot-under-sway-greetd-session/27352/3 
-              virtualisation.qemu.options =
-                [ "-vga none" "-device virtio-gpu-pci" "-display gtk" ];
-              # services.xserver.desktopManager.gnome.enable = true;
-              programs.hyprland = { enable = true; };
-              home-manager.useUserPackages = true;
-              # Use the global `pkgs` from teh system level `nixpkgs` option
-              # and not a private `pkgs` configuration
-              # Again, not really sure what that means
-              home-manager.useGlobalPkgs = true;
-              home-manager.extraSpecialArgs = { inherit user; };
-              # homeConfig = {
-              #   mode = "full";
-              #   graphical = "minimal";
-              # };
-              home-manager.users.${user} = {
-                home.username = user;
-                home.homeDirectory = "/home/${user}";
-                wayland.windowManager.hyprland = {
-                  enable = true;
-                  settings = {
-                    "$mod" = "CTRL_SHIFT";
-                    "bind" = "$mod, Q, exec, kitty";
-                    "exec-once" = "fuzzel";
-                  };
-                };
-                home.stateVersion = "24.05";
-              };
-            }
-          ];
-        });
-      # packages = eachSystem (system:
-      #   let pkgs = pkgsFor.${system};
-      #   in {
-      #     nixosConfigurations.vm = lib.makeOverridable lib.nixosSystem {
-      #       inherit system;
-      #       modules = [{
-      #         boot.kernelPackages = pkgs.linuxPackages_latest;
-      #         services.xserver.enable = true;
-      #       }];
-      #     };
-      #   });
     };
 }

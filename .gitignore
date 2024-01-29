@@ -1,2 +1,5 @@
+result
 result/
 *.qcow2
+shot.png
+.nixos*
