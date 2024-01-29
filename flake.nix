@@ -22,6 +22,8 @@
       # Forward inputs so that the module has access to everything!
       nixosModules.hypr-window-switcher = import ./nix/module.nix inputs;
       nixosModules.default = self.nixosModules.hypr-window-switcher;
+      checks = eachSystem
+        (system: { "integrationTest" = self.packages.${system}.test; });
       packages = eachSystem (system:
         let pkgs = pkgsFor.${system};
         in {
@@ -231,10 +233,10 @@
                 node.wait_until_succeeds(mk_cmd_is_active_window("first"))
                 node.send_key("ctrl-shift-f")
                 node.wait_until_succeeds(mk_cmd_is_fullscreen("first"))
-                safe_screenshot("fullscreen.png")
+                # safe_screenshot("fullscreen.png")
                 execute_window_switcher("second\n")
                 node.wait_until_fails(mk_cmd_is_fullscreen("first"))
-                safe_screenshot("not-fullscreen.png")
+                # safe_screenshot("not-fullscreen.png")
 
               node.shutdown()
             '';
