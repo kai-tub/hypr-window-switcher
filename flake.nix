@@ -191,51 +191,51 @@
                 # Wait for Hyprland to complete startup:
                 node.wait_for_file("/run/user/1000/wayland-1")
                 # wait_for_unit cannot be used as it fails on 'in-active' state!
-                node.wait_until_succeeds("systemctl --machine alice@ --user is-active hyprland-session.target")
+                node.wait_until_succeeds("systemctl --machine alice@ --user is-active hyprland-session.target", 60)
                 node.send_key("ctrl-shift-1") # Force workspace-1 just because we can
 
               with subtest("Starting two terminals called `first` and `second`"):
                 # start first terminal
                 node.succeed(mk_cmd_start_foot("first"))
                 # check if first is in focus
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
                 # start second terminal
                 node.succeed(mk_cmd_start_foot("second"))
 
               with subtest("Ensure that `second` is focused"):
-                node.wait_until_succeeds(mk_cmd_is_active_window("second"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("second"), 60)
 
               with subtest("Switch to `first` via `hypr-window-switcher`"):
                 execute_window_switcher("first\n")
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
 
               # Simple test that cycles between both windows by selecting the default one
               # Starting with focus on `first` from previous test
               with subtest("Ensure that current active window isn't the default selection"):
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
                 execute_window_switcher("\n")
-                node.wait_until_succeeds(mk_cmd_is_active_window("second"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("second"), 60)
                 execute_window_switcher("\n")
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
 
               # Starting with focus on `first`
               with subtest("Ensure switcher can be called on empty workspace"):
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
                 node.send_key("ctrl-shift-3")
-                node.wait_until_succeeds(mk_cmd_is_empty())
+                node.wait_until_succeeds(mk_cmd_is_empty(), 60)
                 # safe_screenshot("empty-workspace.png")
                 # assuming that new workspace doesn't have activewindow
                 execute_window_switcher("first\n")
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
                 # safe_screenshot("switched-workspace.png")
 
               with subtest("Ensure switcher undoes fullscreen, if target window is covered by fullscreen"):
-                node.wait_until_succeeds(mk_cmd_is_active_window("first"))
+                node.wait_until_succeeds(mk_cmd_is_active_window("first"), 60)
                 node.send_key("ctrl-shift-f")
-                node.wait_until_succeeds(mk_cmd_is_fullscreen("first"))
+                node.wait_until_succeeds(mk_cmd_is_fullscreen("first"), 60)
                 # safe_screenshot("fullscreen.png")
                 execute_window_switcher("second\n")
-                node.wait_until_fails(mk_cmd_is_fullscreen("first"))
+                node.wait_until_fails(mk_cmd_is_fullscreen("first"), 60)
                 # safe_screenshot("not-fullscreen.png")
 
               node.shutdown()
