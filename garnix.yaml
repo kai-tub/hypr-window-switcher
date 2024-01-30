@@ -1,0 +1,7 @@
+builds:
+ exclude: [
+    packages.*.test # already covered in flake check
+  ]
+ include:
+ - '*.x86_64-linux.*'
+ - 'devShell.x86_64-linux'
