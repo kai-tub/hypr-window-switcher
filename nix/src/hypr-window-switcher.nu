@@ -26,22 +26,48 @@ def check [cmd: string]: {
 # https://github.com/hyprwm/Hyprland/discussions/830
 # monitor = -1 if monitor becomes unavailable while using the WM
 # classic issue with my thunderbold dock...
-# TODO: Assert structure of JSON (if it isn't empty)!
-# Ordering might be unintuitive. With this set-up if I frequently switch between three windows,
-# and have many more, than those that I infrequently visit will always match first
-# FUTURE: Make the ordering configurable!
+# FUTURE: Make is safe to run via bubblewrap
 let windows = do {^hyprctl -j clients} 
   | complete
   | check "hyprctl" | get stdout
   | from json 
   | where hidden == false and monitor != -1
-  | sort-by --reverse focusHistoryID address # ensure that current window comes last
+  | sort-by focusHistoryID 
+  | do { let inp = $in; $inp | range 1.. | append $inp.0? } # ensure that current window comes last if any window exists
 
 log debug $"windows:\n($windows | select address hidden workspace.id class pinned floating focusHistoryID | table)"
 
+# there must be a smarter way to handle this path configuration...
+let general_config_path = "/etc/hypr-window-switcher/extra_dispatches.txt"
+let config_dir = if ($env.XDG_CONFIG_HOME? | is-empty) {
+  "~/.config"
+} else {
+  $env.XDG_CONFIG_HOME
+}
+let user_config_path = $"($config_dir)/hypr-window-switcher/extra_dispatches.txt" | path expand
+let config_path = if ($user_config_path | path exists) {
+  log debug "Selecting user-specific config"
+  $user_config_path
+} else {
+  log debug "No user-specific config found"
+  $general_config_path
+}
+
+let extra_dispatches = if ($config_path | path exists) {
+  # only ever read a single line!
+  $config_path | open --raw | decode utf-8 | lines | first
+} else {
+  ""
+}
+
+if ($extra_dispatches | is-empty) {
+  log debug "No extra dispatchers configured"
+} else {
+  log debug $"Parsed the following extra dispatches: ($extra_dispatches)"
+}
+
 # This cannot be derived from the focushistory as the last focused window isn't necessarily what we are
 # currently looking at! It might be an empy work-space for example.
-# TODO: Add a test that ensures that we can switch from an empty workspace to a new workspace!
 let active_window = do { ^hyprctl -j activewindow } | complete | check "hyprctl" | get stdout | from json
 
 let current_address_maybe = $active_window | get address?
@@ -92,7 +118,7 @@ log debug $'The target window is covered by ($swallowing_full_screen_windows | l
 let cmd = $swallowing_full_screen_windows
   | get address
   | reduce --fold "" {|it, acc| $"dispatch focuswindow address:($it); dispatch fullscreen 0; " ++ $acc }
-  | ($in ++ $"dispatch focuswindow address:($selected_address); dispatch movecursortocorner 3")
+  | ($in ++ $"dispatch focuswindow address:($selected_address); ($extra_dispatches)")
 
 log debug $"About to execute hyprctl --batch ($cmd)"
 do {

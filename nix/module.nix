@@ -6,6 +6,13 @@ let
 in {
   options.programs.${name} = {
     enable = lib.mkEnableOption name;
+    extra_dispatches = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description =
+        "Additional hyprctl dispatch commands that are run after switching to the new window.";
+      example = ''["dispatch movecursortocorner 2"]'';
+    };
     nu_package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.nushell;
@@ -29,5 +36,10 @@ in {
         fuzzelPackage = cfg.fuzzel_package;
       })
     ];
+    environment.etc."hypr-window-switcher/extra_dispatches.txt" = {
+      enable = (cfg.extra_dispatches != [ ]);
+      source = (pkgs.writeText "hypr-window-switcher-config"
+        (lib.concatStringsSep "; " cfg.extra_dispatches));
+    };
   };
 }
