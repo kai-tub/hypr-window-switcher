@@ -4,7 +4,8 @@ Do you love [Hyprland](https://hyprland.org/), the awesome tiling compositor, an
 but are missing a simple tool to quickly switch to a specific window?
 Maybe `hypr-window-switcher` is what you are looking for!
 
-![Demo video file](https://github.com/kai-tub/hypr-window-switcher/wiki/hypr-window-switcher.mkv)
+![Demo video file](https://raw.githubusercontent.com/wiki/kai-tub/hypr-window-switcher/hypr-window-switcher.mkv)
+![Demo video file](https://raw.githubusercontent.com/wiki/kai-tub/hypr-window-switcher/hypr-window-switcher.mov)
 
 `hypr-window-switcher` is a tiny script that wraps around [fuzzel](https://codeberg.org/dnkl/fuzzel)
 to list all currently open windows, making it easy to switch to the desired window using _fzuzy_ matching!
