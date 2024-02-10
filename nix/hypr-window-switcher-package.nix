@@ -1,5 +1,5 @@
 { pkgs, stdenvNoCC, nix-filter, nuPackage ? pkgs.nushell
-, fuzzelPackage ? pkgs.fuzzel }:
+, fuzzelPackage ? pkgs.fuzzel, }:
 let
   # The following 'internal' script needs access
   # to the binary PATHs. It is easiest to wrap

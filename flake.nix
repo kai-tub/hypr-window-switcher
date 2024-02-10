@@ -12,7 +12,7 @@
   };
 
   outputs = { self, nixpkgs, nix-colors, home-manager, systems, nix-filter
-    , nixos-shell }@inputs:
+    , nixos-shell, }@inputs:
     let
       lib = nixpkgs.lib;
       eachSystem = lib.genAttrs (import systems);
@@ -22,6 +22,7 @@
       # Forward inputs so that the module has access to everything!
       nixosModules.hypr-window-switcher = import ./nix/module.nix inputs;
       nixosModules.default = self.nixosModules.hypr-window-switcher;
+      formatter = eachSystem (system: pkgsFor.${system}.nixfmt);
       checks = eachSystem
         (system: { "integrationTest" = self.packages.${system}.test; });
       packages = eachSystem (system:
@@ -35,7 +36,7 @@
 
           # inspired by:
           # https://github.com/NixOS/nixpkgs/blob/master/nixos/tests/sway.nix
-          test = pkgs.nixosTest ({
+          test = pkgs.nixosTest {
             name = "test";
             nodes = let user = "alice";
             in {
@@ -46,7 +47,10 @@
                 ];
                 boot.kernelPackages = pkgs.linuxPackages;
                 programs.hyprland = { enable = true; };
-                programs.hypr-window-switcher.enable = true;
+                programs.hypr-window-switcher = {
+                  enable = true;
+                  extra_dispatches = [ "dispatch movecursortocorner 2" ];
+                };
                 # user account generation
                 users.users = {
                   "${user}" = {
@@ -81,7 +85,7 @@
                 virtualisation.qemu.options =
                   [ "-vga none -device virtio-gpu-pci" ];
                 # FUTURE: maybe I should create tmpfiles
-                # /tmp/hypr for home-manager instance 
+                # /tmp/hypr for home-manager instance
                 # didn't work
                 # systemd.tmpfiles.rules = [ "/tmp/hypr d - - -" ];
 
@@ -240,7 +244,7 @@
 
               node.shutdown()
             '';
-          });
+          };
         });
       devShells = eachSystem (system:
         let pkgs = pkgsFor.${system};
