@@ -1,14 +1,14 @@
 # hypr-window-switcher
 
 Do you love [Hyprland](https://hyprland.org/), the awesome tiling compositor, and the flexibility and configuration it offers,
-but are missing a simple tool to quickly switch to a specific window?
+but are missing a simple tool to switch to a specific window quickly?
 Maybe `hypr-window-switcher` is what you are looking for!
 
-https://github.com/kai-tub/hypr-window-switcher/assets/46302524/5f3037ae-b727-4d68-8bfa-7bda4cd5fde8
+https://github.com/kai-tub/hypr-window-switcher/assets/46302524/8cd187e4-31e7-4bbf-a4da-38e89352684c
 
 `hypr-window-switcher` is a tiny script that wraps around [fuzzel](https://codeberg.org/dnkl/fuzzel)
 to list all currently open windows, making it easy to switch to the desired window using _fzuzy_ matching!
-`hypr-window-switcher` will also takes care of those pesky hidden windows and still work as expected even when the desired window is hidden behind a fullscreen window. ;)
+`hypr-window-switcher` will also take care of those pesky hidden windows and still work as expected, even when the desired window is hidden behind a fullscreen window. ;)
 
 ## Installation
 
@@ -39,12 +39,12 @@ outputs = {
   # to your Hyprland keybindings!
 ```
 
-However, if you're not a `NixOS` user, you'll have to manually install the following dependencies:
+However, if you're not a `NixOS` user, you'll have to install the following dependencies manually:
 
 - [fuzzel](https://codeberg.org/dnkl/fuzzel)
 - [nushell](https://www.nushell.sh/)
 
-Then, copy the script of the repository from the `src` directory to a directory that is [accessible by your `PATH`](https://astrobiomike.github.io/unix/modifying_your_path).
+Then, copy the repository's script from the `src` directory to a directory that is [accessible by your `PATH`](https://astrobiomike.github.io/unix/modifying_your_path).
 
 ## Configuration
 
@@ -73,15 +73,13 @@ dispatch movecursortocorner 1;
 ```
 
 ## Testing
-To ensure that the script works as expected, NixOS VM tests are used.
-The test will start a VM with a fresh NixOS install and will run a _real_ Hyprland session
-in the background. Different Wayland applications will be started _within_ the VM
-and the test script will check if the `hypr-window-switcher` correctly focuses the entered
+NixOS VM tests are used to ensure that the script works as expected.
+The test will start a VM with a fresh NixOS install and run a _real_ Hyprland session
+in the background. Different Wayland applications will be started _within_ the VM, 
+and the test script will check if the `hypr-window-switcher` correctly focuses on the entered
 target window. Resulting in a _real_ integration test :tada:
 See the `flake.nix` file for more details.
 
 ## ToDo:
-- [ ] Understand why garnix check isn't triggered by PR `create-pull-request`.
 - [ ] Potentially use `bubblewrap` to provide a safer/stricter execution
 - [ ] Maybe move to IP C instead of manually invoking `hyprctl`
-
