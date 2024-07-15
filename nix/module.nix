@@ -1,6 +1,9 @@
-inputs:
-{ config, lib, pkgs, ... }:
-let
+inputs: {
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   name = "hypr-window-switcher";
   cfg = config.programs.${name};
 in {
@@ -8,9 +11,8 @@ in {
     enable = lib.mkEnableOption name;
     extra_dispatches = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [ ];
-      description =
-        "Additional hyprctl dispatch commands that are run after switching to the new window.";
+      default = [];
+      description = "Additional hyprctl dispatch commands that are run after switching to the new window.";
       example = ''["dispatch movecursortocorner 2"]'';
     };
     nu_package = lib.mkOption {
@@ -25,6 +27,15 @@ in {
       defaultText = lib.literalExpression "pkgs.fuzzel";
       description = "The package to use for fuzzel.";
     };
+    move_to_current_workspace = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      example = "true";
+      description = ''
+        If set, the selected window will be moved to the current workspace.
+        If unset (default), the focus will jump to the selected window.
+      '';
+    };
   };
   config = lib.mkIf config.programs.${name}.enable {
     environment.systemPackages = [
@@ -34,12 +45,14 @@ in {
         nix-filter = inputs.self.inputs.nix-filter;
         nuPackage = cfg.nu_package;
         fuzzelPackage = cfg.fuzzel_package;
+        move_to_current_workspace = cfg.move_to_current_workspace;
       })
     ];
     environment.etc."hypr-window-switcher/extra_dispatches.txt" = {
-      enable = (cfg.extra_dispatches != [ ]);
-      source = (pkgs.writeText "hypr-window-switcher-config"
-        (lib.concatStringsSep "; " cfg.extra_dispatches));
+      enable = cfg.extra_dispatches != [];
+      source =
+        pkgs.writeText "hypr-window-switcher-config"
+        (lib.concatStringsSep "; " cfg.extra_dispatches);
     };
   };
 }

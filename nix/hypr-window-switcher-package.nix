@@ -1,6 +1,11 @@
-{ pkgs, stdenvNoCC, nix-filter, nuPackage ? pkgs.nushell
-, fuzzelPackage ? pkgs.fuzzel, }:
-let
+{
+  pkgs,
+  stdenvNoCC,
+  nix-filter,
+  nuPackage ? pkgs.nushell,
+  fuzzelPackage ? pkgs.fuzzel,
+  move_to_current_workspace ? true,
+}: let
   # The following 'internal' script needs access
   # to the binary PATHs. It is easiest to wrap
   # it inside of a writShellApplication derivation
@@ -14,7 +19,7 @@ let
     # buildInputs = [ nuPackage ];
     src = nix-filter {
       root = ./src;
-      include = [ ./src/hypr-window-switcher.nu ];
+      include = [./src/hypr-window-switcher.nu];
     };
     installPhase = ''
       runHook preInstall
@@ -28,21 +33,23 @@ let
     '';
     meta.mainProgram = name;
   };
-in pkgs.writeShellApplication rec {
-  name = "hypr-window-switcher";
-  runtimeInputs = [ script nuPackage fuzzelPackage ];
-  text = ''
-    NU_LOG_LEVEL=DEBUG nu --no-config-file ${script} &> /tmp/hypr-window-switcher.log
-  '';
-  meta = {
-    description = "A Hyprland keyboard-driven window-switcher.";
-    longDescription = ''
-      This program interacts with `hyprctl` from `Hyprland` to
-      generate a searchable `fuzzel`-based `dmenu` list to switch
-      to the target window, while handling variuous corner-cases.
-    '';
-    homepage = "https://github.com/kai-tub/hypr-window-switcher";
-    license = pkgs.lib.licenses.mit;
-    mainProgram = name;
-  };
-}
+in
+  pkgs.writeShellApplication rec {
+    name = "hypr-window-switcher";
+    runtimeInputs = [script nuPackage fuzzelPackage];
+    text =
+      "NU_LOG_LEVEL=DEBUG nu --no-config-file ${script} "
+      + pkgs.lib.optionalString move_to_current_workspace "--move-to-current-workspace "
+      + "&> /tmp/hypr-window-switcher.log";
+    meta = {
+      description = "A Hyprland keyboard-driven window-switcher.";
+      longDescription = ''
+        This program interacts with `hyprctl` from `Hyprland` to
+        generate a searchable `fuzzel`-based `dmenu` list to switch
+        to the target window, while handling variuous corner-cases.
+      '';
+      homepage = "https://github.com/kai-tub/hypr-window-switcher";
+      license = pkgs.lib.licenses.mit;
+      mainProgram = name;
+    };
+  }
