@@ -11,117 +11,140 @@
     nixos-shell.url = "github:Mic92/nixos-shell";
   };
 
-  outputs = { self, nixpkgs, nix-colors, home-manager, systems, nix-filter
-    , nixos-shell, }@inputs:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nix-colors,
+      home-manager,
+      systems,
+      nix-filter,
+      nixos-shell,
+    }@inputs:
     let
       lib = nixpkgs.lib;
       eachSystem = lib.genAttrs (import systems);
       pkgsFor = eachSystem (system: nixpkgs.legacyPackages.${system});
       filter = nix-filter.lib;
-    in {
+    in
+    {
       # Forward inputs so that the module has access to everything!
       nixosModules.hypr-window-switcher = import ./nix/module.nix inputs;
       nixosModules.default = self.nixosModules.hypr-window-switcher;
       formatter = eachSystem (system: pkgsFor.${system}.nixfmt);
-      checks = eachSystem
-        (system: { "integrationTest" = self.packages.${system}.test; });
-      packages = eachSystem (system:
-        let pkgs = pkgsFor.${system};
-        in {
-          "hypr-window-switcher" =
-            pkgs.callPackage ./nix/hypr-window-switcher-package.nix {
-              nix-filter = filter;
-            };
+      checks = eachSystem (system: {
+        "integrationTest" = self.packages.${system}.test;
+      });
+      packages = eachSystem (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        {
+          "hypr-window-switcher" = pkgs.callPackage ./nix/hypr-window-switcher-package.nix {
+            nix-filter = filter;
+          };
           default = self.packages.${system}."hypr-window-switcher";
 
           # inspired by:
           # https://github.com/NixOS/nixpkgs/blob/master/nixos/tests/sway.nix
           test = pkgs.nixosTest {
             name = "test";
-            nodes = let user = "alice";
-            in {
-              node = { config, pkgs, ... }: {
-                imports = [
-                  home-manager.nixosModules.home-manager
-                  self.nixosModules.default
-                ];
-                boot.kernelPackages = pkgs.linuxPackages;
-                programs.hyprland = { enable = true; };
-                programs.hypr-window-switcher = {
-                  enable = true;
-                  extra_dispatches = [ "dispatch movecursortocorner 2" ];
-                };
-                # user account generation
-                users.users = {
-                  "${user}" = {
-                    isNormalUser = true;
-                    extraGroups = [ "networkmanager" "wheel" ];
-                    password = "alice";
-                    uid = 1000;
-                  };
-                };
-                services.getty.autologinUser = user;
-                programs.bash.loginShellInit = ''
-                  if [ "$(tty)" = "/dev/tty1" ]; then
-                    set -e
-
-                    Hyprland
-                  fi
-                '';
-                environment = {
-                  # systemPackages = with pkgs; [ mesa-demos foot ];
-                  variables = {
-                    # Seems to work without any issues for me!
-                    # ok, calling glxinfo does report that there is an error with the
-                    # zink renderer but it feels like it is hardware accellerated
-                    "WLR_RENDERER" = "pixman";
-                    "WLR_RENDERER_ALLOW_SOFTWARE" = "1";
-                  };
-                };
-                # but keyboard input to start switcher and to input logic
-                # FUTURE: Does the gpu option also work on github?
-                # Just set it manually in Hyprland config works best
-                # virtualisation.resolution = { x = 1920; y = 1024; };
-                virtualisation.qemu.options =
-                  [ "-vga none -device virtio-gpu-pci" ];
-                # FUTURE: maybe I should create tmpfiles
-                # /tmp/hypr for home-manager instance
-                # didn't work
-                # systemd.tmpfiles.rules = [ "/tmp/hypr d - - -" ];
-
-                home-manager.users.${user} = {
-                  home.username = user;
-                  home.homeDirectory = "/home/${user}";
-                  wayland.windowManager.hyprland = {
-                    enable = true;
-                    settings = {
-                      "$mod" = "CTRL_SHIFT";
-                      "bind" = [
-                        "$mod, Q, exec, foot"
-                        "$mod, W, exec, hypr-window-switcher"
-                        "$mod, F, fullscreen, 1"
-                        "$mod, 1, workspace, 1"
-                        "$mod, 2, workspace, 2"
-                        "$mod, 3, workspace, 3"
-                      ];
-                      debug = { disable_logs = false; };
-                      misc = {
-                        "force_default_wallpaper" = 0; # disable anime
-                        disable_hyprland_logo = 1;
-                        # "disable_splash_rendering" = 1; # this breaks it somehow
+            nodes =
+              let
+                user = "alice";
+              in
+              {
+                node =
+                  { config, pkgs, ... }:
+                  {
+                    imports = [
+                      home-manager.nixosModules.home-manager
+                      self.nixosModules.default
+                    ];
+                    boot.kernelPackages = pkgs.linuxPackages;
+                    programs.hyprland = {
+                      enable = true;
+                    };
+                    programs.hypr-window-switcher = {
+                      enable = true;
+                      extra_dispatches = [ "dispatch movecursortocorner 2" ];
+                    };
+                    # user account generation
+                    users.users = {
+                      "${user}" = {
+                        isNormalUser = true;
+                        extraGroups = [
+                          "networkmanager"
+                          "wheel"
+                        ];
+                        password = "alice";
+                        uid = 1000;
                       };
-                      "animations" = {
-                        enabled = false;
-                        first_launch_animation = false;
+                    };
+                    services.getty.autologinUser = user;
+                    programs.bash.loginShellInit = ''
+                      if [ "$(tty)" = "/dev/tty1" ]; then
+                        set -e
+
+                        Hyprland
+                      fi
+                    '';
+                    environment = {
+                      # systemPackages = with pkgs; [ mesa-demos foot ];
+                      variables = {
+                        # Seems to work without any issues for me!
+                        # ok, calling glxinfo does report that there is an error with the
+                        # zink renderer but it feels like it is hardware accellerated
+                        "WLR_RENDERER" = "pixman";
+                        "WLR_RENDERER_ALLOW_SOFTWARE" = "1";
                       };
-                      # if I want to have high-res debugging:
-                      # "monitor" = [ ", 1920x1080, auto, 1" ];
+                    };
+                    # but keyboard input to start switcher and to input logic
+                    # FUTURE: Does the gpu option also work on github?
+                    # Just set it manually in Hyprland config works best
+                    # virtualisation.resolution = { x = 1920; y = 1024; };
+                    virtualisation.qemu.options = [ "-vga none -device virtio-gpu-pci" ];
+                    # FUTURE: maybe I should create tmpfiles
+                    # /tmp/hypr for home-manager instance
+                    # didn't work
+                    # systemd.tmpfiles.rules = [ "/tmp/hypr d - - -" ];
+
+                    home-manager.users.${user} = {
+                      home.username = user;
+                      home.homeDirectory = "/home/${user}";
+                      wayland.windowManager.hyprland = {
+                        enable = true;
+                        settings = {
+                          "$mod" = "CTRL_SHIFT";
+                          "bind" = [
+                            "$mod, Q, exec, foot"
+                            "$mod, W, exec, hypr-window-switcher"
+                            "$mod, F, fullscreen, 1"
+                            "$mod, 1, workspace, 1"
+                            "$mod, 2, workspace, 2"
+                            "$mod, 3, workspace, 3"
+                          ];
+                          debug = {
+                            disable_logs = false;
+                          };
+                          misc = {
+                            "force_default_wallpaper" = 0; # disable anime
+                            disable_hyprland_logo = 1;
+                            # "disable_splash_rendering" = 1; # this breaks it somehow
+                          };
+                          "animations" = {
+                            enabled = false;
+                            first_launch_animation = false;
+                          };
+                          # if I want to have high-res debugging:
+                          # "monitor" = [ ", 1920x1080, auto, 1" ];
+                        };
+                      };
+                      home.stateVersion = "24.05";
                     };
                   };
-                  home.stateVersion = "24.05";
-                };
               };
-            };
             skipLint = false;
             # let
             # user = nodes.machine.config.users.users.alice;
@@ -245,14 +268,19 @@
               node.shutdown()
             '';
           };
-        });
-      devShells = eachSystem (system:
-        let pkgs = pkgsFor.${system};
-        in {
+        }
+      );
+      devShells = eachSystem (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        {
           default = pkgs.mkShell {
             name = "env";
             buildInputs = [ pkgs.stdenv ];
           };
-        });
+        }
+      );
     };
 }

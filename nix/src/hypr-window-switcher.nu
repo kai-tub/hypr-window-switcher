@@ -1,25 +1,6 @@
 #!/usr/bin/env nu --no-config-file
 use std log
 
-# Check output of `complete`
-# and raise error if non-zero exit status exists
-def check [cmd: string]: {
-  let inp = $in
-  if $inp.exit_code == 0 {
-    return $inp
-  } else {
-    let stderr = $inp.stderr?
-    let msg = if ($stderr | is-empty) {
-      $"Command ($cmd) failed"
-    } else {
-      $"Command ($cmd) failed with:\n($stderr)"
-    }
-    error make -u {
-      msg: $msg
-    }
-  }
-}
-
 # hypr-window-switcher uses fuzzel to list all open windows and either jumps
 # to the selection (default) or moves the selected window to the current workspace
 # (`--move-to-current-workspace`)
@@ -31,13 +12,8 @@ def main [--move-to-current-workspace] {
   # https://github.com/hyprwm/Hyprland/discussions/830
   # monitor = -1 if monitor becomes unavailable while using the WM
   # classic issue with my thunderbold dock...
-  let windows = do {^hyprctl -j clients} 
-    | complete
-    | check "hyprctl" | get stdout
-    | from json 
-    | where hidden == false and monitor != -1
-    | sort-by focusHistoryID 
-    | do { let inp = $in; $inp | range 1.. | append $inp.0? } # ensure that current window comes last if any window exists
+  let windows = ^hyprctl -j clients | from json | where hidden == false and monitor != -1 | sort-by focusHistoryID | do { let inp = $in; $inp | slice 1.. | append $inp.0? }
+  # ensure that current window comes last if any window exists
 
   log debug $"windows:\n($windows | select address hidden workspace.id class pinned floating focusHistoryID | table)"
 
@@ -72,27 +48,20 @@ def main [--move-to-current-workspace] {
 
   # This cannot be derived from the focushistory as the last focused window isn't necessarily what we are
   # currently looking at! It might be an empy work-space for example.
-  let active_window = do { ^hyprctl -j activewindow } | complete | check "hyprctl" | get stdout | from json
+  let active_window = ^hyprctl -j activewindow | from json
 
   let current_address_maybe = $active_window | get address?
 
-  let active_workspace_id = do { ^hyprctl -j activeworkspace } | complete | check "hyprctl" | get stdout | from json | get id
+  let active_workspace_id = ^hyprctl -j activeworkspace | from json | get id
 
-  let rofi_out = $windows
+  let selected = $windows
     | each {
       |r| 
       # use rofi icon string
       $"[($r.workspace.name)] ($r.title) | ($r.class)\u{0}icon\u{1f}($r.class)"
     } 
     | str join "\n"
-    | do { ^fuzzel --dmenu --index }  # wrapping with `do` required to capture stderr!
-    | complete 
-    | check "fuzzel"
-
-  log debug $"Rofi stderr:\n($rofi_out | get stderr?)"
-
-  let selected = $rofi_out
-    | get stdout
+    | ^fuzzel --dmenu --index  # maybe track stderr again in the future.
 
   if ($selected | is-empty) {
     log info "nothing selected; quitting"
@@ -132,7 +101,7 @@ def main [--move-to-current-workspace] {
   log debug $'The target workspace is covered by ($swallowing_full_screen_windows | length) windows. These will be minified.'
 
   let destination_cmd = if $move_to_current_workspace {
-    $"dispatch movetoworkspace ($active_workspace_id),address:($selected_address)"
+    $"dispatch movetoworkspace ($active_workspace_id),address:($selected_address); dispatch focuswindow address:($selected_address)"
   } else {
     $"dispatch focuswindow address:($selected_address)"
   }
@@ -144,8 +113,5 @@ def main [--move-to-current-workspace] {
 
 
   log debug $"About to execute hyprctl --batch ($cmd)"
-  do {
-    $cmd | ^hyprctl --batch $in
-  } | complete | check "hyprctl" 
-
+  $cmd | ^hyprctl --batch $in
 }
